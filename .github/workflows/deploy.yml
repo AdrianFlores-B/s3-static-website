@@ -1,0 +1,37 @@
+name: Deploy website to S3
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Un deploy a la vez y el último commit gana (p.ej. nuestro redeploy + el commit del verificador)
+concurrency:
+  group: deploy-s3
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: eu-west-1
+      S3_BUCKET: cmtr-5lvwk1z7-bucket-1792640804
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Deploy index.html to the bucket root
+        run: |
+          # Reintentos: una access key recién creada tarda unos segundos en propagarse en IAM
+          for i in 1 2 3 4 5; do
+            aws s3 cp index.html "s3://$S3_BUCKET/index.html" --content-type text/html --cache-control no-cache && exit 0
+            echo "intento $i falló; reintento en 10 s"; sleep 10
+          done
+          exit 1
